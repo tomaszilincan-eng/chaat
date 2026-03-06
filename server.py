@@ -19,10 +19,12 @@ app.add_middleware(
 # room -> active sockets
 rooms: Dict[str, Set[WebSocket]] = {}
 
+# websocket -> {"user": ..., "room": ...}
+clients: Dict[WebSocket, dict] = {}
+
 # room -> message history
 history: Dict[str, List[dict]] = {}
 
-# koľko správ držať v pamäti na room
 MAX_HISTORY = 100
 
 
@@ -56,6 +58,34 @@ async def safe_send(ws: WebSocket, payload: dict) -> bool:
         return False
 
 
+def get_room_users(room: str) -> List[str]:
+    users = []
+    for ws in rooms.get(room, set()):
+        info = clients.get(ws)
+        if info and info.get("room") == room:
+            users.append(info.get("user", "user"))
+    # unique + sorted
+    return sorted(list(set(users)), key=str.lower)
+
+
+async def send_user_list(room: str):
+    payload = {
+        "type": "users",
+        "room": room,
+        "users": get_room_users(room)
+    }
+
+    dead = []
+    for ws in rooms.get(room, set()):
+        ok = await safe_send(ws, payload)
+        if not ok:
+            dead.append(ws)
+
+    for ws in dead:
+        rooms.get(room, set()).discard(ws)
+        clients.pop(ws, None)
+
+
 async def broadcast(room: str, payload: dict, save: bool = True):
     if save:
         add_to_history(room, payload)
@@ -68,6 +98,7 @@ async def broadcast(room: str, payload: dict, save: bool = True):
 
     for ws in dead:
         rooms.get(room, set()).discard(ws)
+        clients.pop(ws, None)
 
 
 async def send_history(ws: WebSocket, room: str):
@@ -94,12 +125,11 @@ async def ws_endpoint(ws: WebSocket):
             user = str(hello.get("user", "user"))[:24]
 
         rooms.setdefault(room, set()).add(ws)
+        clients[ws] = {"user": user, "room": room}
 
-        # najprv pošli históriu, aby user videl čo zmeškal
+        # pošli históriu a zoznam online userov
         await send_history(ws, room)
-
-        join_msg = {"type": "system", "text": f"🟢 {user} joined #{room}"}
-        await broadcast(room, join_msg, save=True)
+        await send_user_list(room)
 
         while True:
             raw = await ws.receive_text()
@@ -121,24 +151,31 @@ async def ws_endpoint(ws: WebSocket):
             elif t == "set_room":
                 new_room = str(msg.get("room", "general"))[:32]
                 if new_room != room:
-                    rooms.get(room, set()).discard(ws)
-                    await broadcast(room, {"type": "system", "text": f"🟡 {user} left"}, save=True)
+                    old_room = room
+
+                    rooms.get(old_room, set()).discard(ws)
 
                     room = new_room
                     rooms.setdefault(room, set()).add(ws)
+                    clients[ws] = {"user": user, "room": room}
 
-                    # po zmene room pošli históriu novej room
                     await send_history(ws, room)
-                    await broadcast(room, {"type": "system", "text": f"🟢 {user} joined #{room}"}, save=True)
+                    await send_user_list(old_room)
+                    await send_user_list(room)
 
     except WebSocketDisconnect:
         pass
     except Exception as e:
         print("WS ERROR:", repr(e))
     finally:
-        rooms.get(room, set()).discard(ws)
+        old_info = clients.get(ws)
+        old_room = old_info.get("room") if old_info else room
+
+        rooms.get(old_room, set()).discard(ws)
+        clients.pop(ws, None)
+
         try:
-            await broadcast(room, {"type": "system", "text": f"🔴 {user} left"}, save=True)
+            await send_user_list(old_room)
         except Exception:
             pass
 
