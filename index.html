@@ -71,10 +71,18 @@
 
 <script>
 let ws = null;
+let reconnectTimer = null;
+let pingTimer = null;
 let currentRoom = "general";
+let currentNick = "user";
+let manuallyConnecting = false;
+
 const log = document.getElementById("log");
 const statusPill = document.getElementById("status");
 const roomTitle = document.getElementById("roomTitle");
+const nickInput = document.getElementById("nick");
+const roomInput = document.getElementById("room");
+const textInput = document.getElementById("text");
 
 function addLine(html, cls="msg"){
   const d = document.createElement("div");
@@ -84,54 +92,8 @@ function addLine(html, cls="msg"){
   log.scrollTop = log.scrollHeight;
 }
 
-function connect(){
-  const nick = (document.getElementById("nick").value.trim() || "user").slice(0, 24);
-  currentRoom = (document.getElementById("room").value.trim() || "general").slice(0, 32);
-  roomTitle.textContent = "# " + currentRoom;
-
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
-
-  ws.onopen = () => {
-    statusPill.textContent = "online";
-    ws.send(JSON.stringify({type:"hello", user:nick, room:currentRoom}));
-    addLine("✅ Connected", "msg sys");
-  };
-
-  ws.onmessage = (ev) => {
-    const m = JSON.parse(ev.data);
-    if(m.type === "msg"){
-      addLine(`<b>${escapeHtml(m.user)}:</b> ${escapeHtml(m.text)}`);
-    } else if(m.type === "system"){
-      addLine(escapeHtml(m.text), "msg sys");
-    }
-  };
-
-  ws.onclose = () => {
-    statusPill.textContent = "offline";
-    addLine("⚠️ Disconnected", "msg sys");
-  };
-}
-
-function send(){
-  if(!ws || ws.readyState !== 1) return;
-  const t = document.getElementById("text");
-  const text = t.value.trim();
-  if(!text) return;
-  ws.send(JSON.stringify({type:"msg", text}));
-  t.value = "";
-}
-
-function switchRoom(r){
-  document.getElementById("room").value = r;
-  if(ws && ws.readyState === 1){
-    ws.send(JSON.stringify({type:"set_room", room:r}));
-    currentRoom = r;
-    roomTitle.textContent = "# " + currentRoom;
-    addLine("➡️ switched room", "msg sys");
-  } else {
-    roomTitle.textContent = "# " + r;
-  }
+function clearLog(){
+  log.innerHTML = "";
 }
 
 function escapeHtml(s){
@@ -141,9 +103,160 @@ function escapeHtml(s){
     .replaceAll(">","&gt;");
 }
 
-document.getElementById("connect").onclick = connect;
+function wsUrl(){
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/ws`;
+}
+
+function setStatus(txt){
+  statusPill.textContent = txt;
+}
+
+function saveSession(){
+  localStorage.setItem("chat_nick", currentNick);
+  localStorage.setItem("chat_room", currentRoom);
+}
+
+function loadSession(){
+  const savedNick = localStorage.getItem("chat_nick");
+  const savedRoom = localStorage.getItem("chat_room");
+
+  if(savedNick) nickInput.value = savedNick;
+  if(savedRoom) roomInput.value = savedRoom;
+}
+
+function startPing(){
+  stopPing();
+  pingTimer = setInterval(() => {
+    if(ws && ws.readyState === 1){
+      ws.send(JSON.stringify({type:"ping"}));
+    }
+  }, 20000);
+}
+
+function stopPing(){
+  if(pingTimer){
+    clearInterval(pingTimer);
+    pingTimer = null;
+  }
+}
+
+function scheduleReconnect(){
+  if(reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect(true);
+  }, 1500);
+}
+
+function connect(isAuto=false){
+  currentNick = (nickInput.value.trim() || "user").slice(0, 24);
+  currentRoom = (roomInput.value.trim() || "general").slice(0, 32);
+
+  roomTitle.textContent = "# " + currentRoom;
+  saveSession();
+
+  if(ws && ws.readyState === 1){
+    ws.close();
+  }
+
+  manuallyConnecting = !isAuto;
+  ws = new WebSocket(wsUrl());
+
+  ws.onopen = () => {
+    setStatus("online");
+    ws.send(JSON.stringify({
+      type: "hello",
+      user: currentNick,
+      room: currentRoom
+    }));
+    startPing();
+
+    if(manuallyConnecting){
+      addLine("✅ Connected", "msg sys");
+    }
+  };
+
+  ws.onmessage = (ev) => {
+    let m = null;
+    try{
+      m = JSON.parse(ev.data);
+    }catch{
+      return;
+    }
+
+    if(m.type === "history"){
+      clearLog();
+      const items = m.items || [];
+      if(items.length === 0){
+        addLine("ℹ️ Žiadna história v tejto room.", "msg sys");
+      } else {
+        addLine("📜 Načítaná história miestnosti", "msg sys");
+        for(const item of items){
+          if(item.type === "msg"){
+            addLine(`<b>${escapeHtml(item.user)}:</b> ${escapeHtml(item.text)}`);
+          } else if(item.type === "system"){
+            addLine(escapeHtml(item.text), "msg sys");
+          }
+        }
+      }
+    } else if(m.type === "msg"){
+      addLine(`<b>${escapeHtml(m.user)}:</b> ${escapeHtml(m.text)}`);
+    } else if(m.type === "system"){
+      addLine(escapeHtml(m.text), "msg sys");
+    } else if(m.type === "pong"){
+      // keepalive OK
+    }
+  };
+
+  ws.onclose = () => {
+    stopPing();
+    setStatus("offline");
+    addLine("⚠️ Disconnected. Reconnecting…", "msg sys");
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    setStatus("error");
+  };
+}
+
+function send(){
+  if(!ws || ws.readyState !== 1) return;
+
+  const text = textInput.value.trim();
+  if(!text) return;
+
+  ws.send(JSON.stringify({type:"msg", text}));
+  textInput.value = "";
+}
+
+function switchRoom(r){
+  roomInput.value = r;
+  currentRoom = r;
+  roomTitle.textContent = "# " + currentRoom;
+  saveSession();
+
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({type:"set_room", room:r}));
+  }
+}
+
+document.getElementById("connect").onclick = () => connect(false);
 document.getElementById("send").onclick = send;
-document.getElementById("text").addEventListener("keydown", (e)=>{ if(e.key==="Enter") send(); });
+textInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") send();
+});
+
+window.onload = () => {
+  loadSession();
+  currentNick = (nickInput.value.trim() || "user").slice(0, 24);
+  currentRoom = (roomInput.value.trim() || "general").slice(0, 32);
+  roomTitle.textContent = "# " + currentRoom;
+
+  // auto connect po otvorení stránky
+  connect(true);
+};
 </script>
 </body>
 </html>
