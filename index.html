@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Discord</title>
+  <style>
+    body{margin:0;font-family:system-ui;background:#0b1220;color:#e7eefc}
+    .wrap{display:grid;grid-template-columns:260px 1fr;height:100vh}
+    .left{background:#0f1a2e;border-right:1px solid rgba(255,255,255,.08);padding:14px}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px;margin-bottom:12px}
+    input,button{border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:#e7eefc;padding:10px;width:100%}
+    button{cursor:pointer;background:#2f6bff;border:none;font-weight:700}
+    .rooms button{margin-top:8px;background:rgba(255,255,255,.10)}
+    .main{display:grid;grid-template-rows:auto 1fr auto}
+    .top{padding:14px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+    .log{padding:14px;overflow:auto}
+    .msg{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);margin-bottom:10px}
+    .sys{opacity:.75}
+    .bottom{padding:14px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px}
+    .bottom input{flex:1}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}
+    .hint{opacity:.7;font-size:12px;margin-top:6px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <div class="card">
+      <div style="font-weight:800;font-size:18px;margin-bottom:10px">Mini Discord</div>
+
+      <label>Nick</label>
+      <input id="nick" placeholder="misko" value="misko">
+
+      <div style="height:10px"></div>
+
+      <label>Room</label>
+      <input id="room" placeholder="general" value="general">
+
+      <div class="hint">Tip: #general, #football, #memes</div>
+
+      <div style="height:12px"></div>
+      <button id="connect">CONNECT</button>
+
+      <div style="margin-top:10px">
+        <span class="pill" id="status">offline</span>
+      </div>
+    </div>
+
+    <div class="card rooms">
+      <div style="font-weight:700;margin-bottom:6px">Quick Rooms</div>
+      <button onclick="switchRoom('general')"># general</button>
+      <button onclick="switchRoom('football')"># football</button>
+      <button onclick="switchRoom('memes')"># memes</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      Room: <b id="roomTitle">-</b>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="bottom">
+      <input id="text" placeholder="Napíš správu... (Enter)">
+      <button id="send" style="width:140px">SEND</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let ws = null;
+let currentRoom = "general";
+const log = document.getElementById("log");
+const statusPill = document.getElementById("status");
+const roomTitle = document.getElementById("roomTitle");
+
+function addLine(html, cls="msg"){
+  const d = document.createElement("div");
+  d.className = cls;
+  d.innerHTML = html;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+function connect(){
+  const nick = (document.getElementById("nick").value.trim() || "user").slice(0, 24);
+  currentRoom = (document.getElementById("room").value.trim() || "general").slice(0, 32);
+  roomTitle.textContent = "# " + currentRoom;
+
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    statusPill.textContent = "online";
+    ws.send(JSON.stringify({type:"hello", user:nick, room:currentRoom}));
+    addLine("✅ Connected", "msg sys");
+  };
+
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if(m.type === "msg"){
+      addLine(`<b>${escapeHtml(m.user)}:</b> ${escapeHtml(m.text)}`);
+    } else if(m.type === "system"){
+      addLine(escapeHtml(m.text), "msg sys");
+    }
+  };
+
+  ws.onclose = () => {
+    statusPill.textContent = "offline";
+    addLine("⚠️ Disconnected", "msg sys");
+  };
+}
+
+function send(){
+  if(!ws || ws.readyState !== 1) return;
+  const t = document.getElementById("text");
+  const text = t.value.trim();
+  if(!text) return;
+  ws.send(JSON.stringify({type:"msg", text}));
+  t.value = "";
+}
+
+function switchRoom(r){
+  document.getElementById("room").value = r;
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({type:"set_room", room:r}));
+    currentRoom = r;
+    roomTitle.textContent = "# " + currentRoom;
+    addLine("➡️ switched room", "msg sys");
+  } else {
+    roomTitle.textContent = "# " + r;
+  }
+}
+
+function escapeHtml(s){
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+document.getElementById("connect").onclick = connect;
+document.getElementById("send").onclick = send;
+document.getElementById("text").addEventListener("keydown", (e)=>{ if(e.key==="Enter") send(); });
+</script>
+</body>
+</html>
