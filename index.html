@@ -11,7 +11,291 @@
     .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px;margin-bottom:12px}
     input,button{border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:#e7eefc;padding:10px;width:100%}
     button{cursor:pointer;background:#2f6bff;border:none;font-weight:700}
+    .rooms button{margin-top:8px;background:rgba(255,255,255,.10)}<!doctype html>
+<html lang="sk">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Discord</title>
+  <style>
+    body{margin:0;font-family:system-ui;background:#0b1220;color:#e7eefc}
+    .wrap{display:grid;grid-template-columns:260px 1fr 220px;height:100vh}
+    .left{background:#0f1a2e;border-right:1px solid rgba(255,255,255,.08);padding:14px}
+    .right{background:#0f1a2e;border-left:1px solid rgba(255,255,255,.08);padding:14px}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:14px;padding:12px;margin-bottom:12px}
+    input,button{border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.25);color:#e7eefc;padding:10px;width:100%;box-sizing:border-box}
+    button{cursor:pointer;background:#2f6bff;border:none;font-weight:700}
     .rooms button{margin-top:8px;background:rgba(255,255,255,.10)}
+    .main{display:grid;grid-template-rows:auto 1fr auto}
+    .top{padding:14px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
+    .log{padding:14px;overflow:auto}
+    .msg{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);margin-bottom:10px}
+    .sys{opacity:.75}
+    .bottom{padding:14px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:10px}
+    .bottom input{flex:1}
+    .pill{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10)}
+    .hint{opacity:.7;font-size:12px;margin-top:6px}
+    .user-item{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);margin-bottom:8px}
+    .online-dot{display:inline-block;width:10px;height:10px;border-radius:999px;background:#57d163;margin-right:8px}
+    .section-title{font-weight:700;margin-bottom:10px}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <div class="card">
+      <div style="font-weight:800;font-size:18px;margin-bottom:10px">Mini Discord</div>
+
+      <label>Nick</label>
+      <input id="nick" placeholder="misko" value="misko">
+
+      <div style="height:10px"></div>
+
+      <label>Room</label>
+      <input id="room" placeholder="general" value="general">
+
+      <div class="hint">Tip: #general, #football, #memes</div>
+
+      <div style="height:12px"></div>
+      <button id="connect">CONNECT</button>
+
+      <div style="margin-top:10px">
+        <span class="pill" id="status">offline</span>
+      </div>
+    </div>
+
+    <div class="card rooms">
+      <div class="section-title">Quick Rooms</div>
+      <button onclick="switchRoom('general')"># general</button>
+      <button onclick="switchRoom('football')"># football</button>
+      <button onclick="switchRoom('memes')"># memes</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      Room: <b id="roomTitle">-</b>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <div class="bottom">
+      <input id="text" placeholder="Napíš správu... (Enter)">
+      <button id="send" style="width:140px">SEND</button>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <div class="section-title">Online Users</div>
+      <div id="users"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let ws = null;
+let reconnectTimer = null;
+let pingTimer = null;
+let currentRoom = "general";
+let currentNick = "user";
+let manuallyConnecting = false;
+
+const log = document.getElementById("log");
+const usersBox = document.getElementById("users");
+const statusPill = document.getElementById("status");
+const roomTitle = document.getElementById("roomTitle");
+const nickInput = document.getElementById("nick");
+const roomInput = document.getElementById("room");
+const textInput = document.getElementById("text");
+
+function addLine(html, cls="msg"){
+  const d = document.createElement("div");
+  d.className = cls;
+  d.innerHTML = html;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog(){
+  log.innerHTML = "";
+}
+
+function renderUsers(users){
+  usersBox.innerHTML = "";
+  if(!users || users.length === 0){
+    usersBox.innerHTML = `<div class="hint">Nikto nie je online</div>`;
+    return;
+  }
+
+  for(const user of users){
+    const div = document.createElement("div");
+    div.className = "user-item";
+    div.innerHTML = `<span class="online-dot"></span>${escapeHtml(user)}`;
+    usersBox.appendChild(div);
+  }
+}
+
+function escapeHtml(s){
+  return (s||"")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;");
+}
+
+function wsUrl(){
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/ws`;
+}
+
+function setStatus(txt){
+  statusPill.textContent = txt;
+}
+
+function saveSession(){
+  localStorage.setItem("chat_nick", currentNick);
+  localStorage.setItem("chat_room", currentRoom);
+}
+
+function loadSession(){
+  const savedNick = localStorage.getItem("chat_nick");
+  const savedRoom = localStorage.getItem("chat_room");
+
+  if(savedNick) nickInput.value = savedNick;
+  if(savedRoom) roomInput.value = savedRoom;
+}
+
+function startPing(){
+  stopPing();
+  pingTimer = setInterval(() => {
+    if(ws && ws.readyState === 1){
+      ws.send(JSON.stringify({type:"ping"}));
+    }
+  }, 20000);
+}
+
+function stopPing(){
+  if(pingTimer){
+    clearInterval(pingTimer);
+    pingTimer = null;
+  }
+}
+
+function scheduleReconnect(){
+  if(reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect(true);
+  }, 1500);
+}
+
+function connect(isAuto=false){
+  currentNick = (nickInput.value.trim() || "user").slice(0, 24);
+  currentRoom = (roomInput.value.trim() || "general").slice(0, 32);
+
+  roomTitle.textContent = "# " + currentRoom;
+  saveSession();
+
+  if(ws && ws.readyState === 1){
+    ws.close();
+  }
+
+  manuallyConnecting = !isAuto;
+  ws = new WebSocket(wsUrl());
+
+  ws.onopen = () => {
+    setStatus("online");
+    ws.send(JSON.stringify({
+      type: "hello",
+      user: currentNick,
+      room: currentRoom
+    }));
+    startPing();
+
+    if(manuallyConnecting){
+      addLine("✅ Connected", "msg sys");
+    }
+  };
+
+  ws.onmessage = (ev) => {
+    let m = null;
+    try{
+      m = JSON.parse(ev.data);
+    }catch{
+      return;
+    }
+
+    if(m.type === "history"){
+      clearLog();
+      const items = m.items || [];
+      if(items.length === 0){
+        addLine("📜 Žiadna história v tejto room.", "msg sys");
+      } else {
+        addLine("📜 Načítaná história miestnosti", "msg sys");
+        for(const item of items){
+          if(item.type === "msg"){
+            addLine(`<b>${escapeHtml(item.user)}:</b> ${escapeHtml(item.text)}`);
+          }
+        }
+      }
+    } else if(m.type === "msg"){
+      addLine(`<b>${escapeHtml(m.user)}:</b> ${escapeHtml(m.text)}`);
+    } else if(m.type === "users"){
+      renderUsers(m.users || []);
+    } else if(m.type === "pong"){
+    }
+  };
+
+  ws.onclose = () => {
+    stopPing();
+    setStatus("offline");
+    renderUsers([]);
+    addLine("⚠️ Disconnected. Reconnecting…", "msg sys");
+    scheduleReconnect();
+  };
+
+  ws.onerror = () => {
+    setStatus("error");
+  };
+}
+
+function send(){
+  if(!ws || ws.readyState !== 1) return;
+
+  const text = textInput.value.trim();
+  if(!text) return;
+
+  ws.send(JSON.stringify({type:"msg", text}));
+  textInput.value = "";
+}
+
+function switchRoom(r){
+  roomInput.value = r;
+  currentRoom = r;
+  roomTitle.textContent = "# " + currentRoom;
+  saveSession();
+
+  if(ws && ws.readyState === 1){
+    ws.send(JSON.stringify({type:"set_room", room:r}));
+  }
+}
+
+document.getElementById("connect").onclick = () => connect(false);
+document.getElementById("send").onclick = send;
+textInput.addEventListener("keydown", (e) => {
+  if(e.key === "Enter") send();
+});
+
+window.onload = () => {
+  loadSession();
+  currentNick = (nickInput.value.trim() || "user").slice(0, 24);
+  currentRoom = (roomInput.value.trim() || "general").slice(0, 32);
+  roomTitle.textContent = "# " + currentRoom;
+  connect(true);
+};
+</script>
+</body>
+</html>
     .main{display:grid;grid-template-rows:auto 1fr auto}
     .top{padding:14px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.03)}
     .log{padding:14px;overflow:auto}
@@ -257,3 +541,4 @@ window.onload = () => {
 </script>
 </body>
 </html>
+
