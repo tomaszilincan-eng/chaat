@@ -205,7 +205,6 @@ function connect(isAuto=false){
     } else if(m.type === "system"){
       addLine(escapeHtml(m.text), "msg sys");
     } else if(m.type === "pong"){
-      // keepalive OK
     }
   };
 
@@ -253,8 +252,6 @@ window.onload = () => {
   currentNick = (nickInput.value.trim() || "user").slice(0, 24);
   currentRoom = (roomInput.value.trim() || "general").slice(0, 32);
   roomTitle.textContent = "# " + currentRoom;
-
-  // auto connect po otvorení stránky
   connect(true);
 };
 </script>
