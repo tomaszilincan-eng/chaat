@@ -1,189 +1,840 @@
 <!DOCTYPE html>
 <html lang="sk">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-user Chat</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Room Chat</title>
+  <style>
+    :root {
+      --bg: #0a0f1f;
+      --panel: rgba(17, 24, 39, 0.96);
+      --panel-2: #111827;
+      --panel-3: #0f172a;
+      --border: rgba(255,255,255,0.08);
+      --text: #e5eefc;
+      --muted: #97a6c5;
+      --accent: #60a5fa;
+      --accent-2: #34d399;
+      --bubble-me: #2563eb;
+      --bubble-other: #1f2937;
+      --shadow: 0 18px 40px rgba(0,0,0,0.35);
+    }
 
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f3f4f6;
-        }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(96,165,250,0.14), transparent 25%),
+        radial-gradient(circle at bottom right, rgba(52,211,153,0.10), transparent 20%),
+        linear-gradient(180deg, #020617 0%, #0a0f1f 100%);
+    }
 
-        .chat {
-            max-width: 800px;
-            height: 90vh;
-            margin: 20px auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 18px;
+      padding: 18px;
+    }
 
-        .header {
-            background: #2563eb;
-            color: white;
-            padding: 16px 20px;
-            font-size: 20px;
-            font-weight: bold;
-        }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
 
-        .topbar {
-            display: flex;
-            gap: 10px;
-            padding: 12px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f9fafb;
-        }
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+    }
 
-        .topbar input {
-            padding: 10px 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 10px;
-            font-size: 14px;
-        }
+    .sidebar-top {
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+    }
 
-        #username {
-            width: 180px;
-        }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
 
-        .messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 16px;
-            background: #f9fafb;
-        }
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #2563eb, #34d399);
+    }
 
-        .msg {
-            margin: 10px 0;
-            padding: 10px 14px;
-            border-radius: 12px;
-            background: #e5e7eb;
-            width: fit-content;
-            max-width: 75%;
-            word-wrap: break-word;
-        }
+    .brand h1 {
+      margin: 0;
+      font-size: 20px;
+    }
 
-        .system {
-            background: #dbeafe;
-            color: #1e3a8a;
-        }
+    .brand p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
 
-        .meta {
-            font-size: 12px;
-            color: #6b7280;
-            margin-bottom: 4px;
-        }
+    .field, .textarea, .btn, .select {
+      width: 100%;
+      background: var(--panel-3);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      outline: none;
+    }
 
-        .inputBox {
-            display: flex;
-            gap: 10px;
-            padding: 12px;
-            border-top: 1px solid #e5e7eb;
-            background: white;
-        }
+    .textarea {
+      min-height: 90px;
+      resize: vertical;
+      line-height: 1.5;
+    }
 
-        #messageText {
-            flex: 1;
-            padding: 12px;
-            border: 1px solid #d1d5db;
-            border-radius: 10px;
-            font-size: 16px;
-        }
+    .btn {
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
 
-        button {
-            border: none;
-            background: #2563eb;
-            color: white;
-            padding: 12px 18px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 15px;
-        }
+    .btn:hover {
+      transform: translateY(-1px);
+      background: #172038;
+    }
 
-        button:hover {
-            background: #1d4ed8;
-        }
-    </style>
+    .btn.primary {
+      background: var(--accent);
+      color: #08111d;
+      font-weight: 700;
+      border-color: transparent;
+    }
+
+    .btn.primary:hover {
+      background: #84bcff;
+    }
+
+    .btn.secondary {
+      background: rgba(52,211,153,0.12);
+      border-color: rgba(52,211,153,0.28);
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .room-list {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow: auto;
+    }
+
+    .room-item {
+      border: 1px solid transparent;
+      border-radius: 18px;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .room-item:hover {
+      background: rgba(255,255,255,0.03);
+      border-color: var(--border);
+    }
+
+    .room-item.active {
+      background: rgba(37,99,235,0.13);
+      border-color: rgba(96,165,250,0.35);
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: white;
+      background: linear-gradient(135deg, #2563eb, #34d399);
+      flex: 0 0 auto;
+    }
+
+    .room-title {
+      font-weight: 700;
+    }
+
+    .room-sub {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .room-count {
+      min-width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      padding: 0 6px;
+    }
+
+    .chat {
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      min-width: 0;
+    }
+
+    .chat-top {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .chat-title h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .chat-title p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .members {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: rgba(255,255,255,0.015);
+    }
+
+    .member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      font-size: 13px;
+    }
+
+    .member-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--accent-2);
+      box-shadow: 0 0 0 5px rgba(52,211,153,0.10);
+    }
+
+    .messages {
+      padding: 20px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-height: 260px;
+    }
+
+    .empty {
+      margin: auto;
+      text-align: center;
+      color: var(--muted);
+      max-width: 420px;
+      line-height: 1.6;
+    }
+
+    .system {
+      align-self: center;
+      color: var(--muted);
+      font-size: 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.10);
+      padding: 7px 12px;
+      border-radius: 999px;
+    }
+
+    .message-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      max-width: 78%;
+    }
+
+    .message-row.me {
+      margin-left: auto;
+      flex-direction: row-reverse;
+    }
+
+    .mini-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 800;
+      flex: 0 0 auto;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    }
+
+    .message-body {
+      min-width: 0;
+    }
+
+    .meta {
+      display: flex;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .message-row.me .meta {
+      justify-content: flex-end;
+    }
+
+    .bubble {
+      background: var(--bubble-other);
+      border: 1px solid rgba(255,255,255,0.05);
+      padding: 12px 14px;
+      border-radius: 18px;
+      border-top-left-radius: 6px;
+      line-height: 1.45;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+
+    .message-row.me .bubble {
+      background: var(--bubble-me);
+      border-top-left-radius: 18px;
+      border-top-right-radius: 6px;
+    }
+
+    .composer {
+      border-top: 1px solid var(--border);
+      padding: 16px 18px 18px;
+      display: grid;
+      grid-template-columns: 180px 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .helper {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    .section {
+      margin-top: 14px;
+    }
+
+    .section label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 960px) {
+      .app { grid-template-columns: 1fr; }
+      .composer { grid-template-columns: 1fr; }
+      .message-row { max-width: 92%; }
+    }
+  </style>
 </head>
 <body>
-    <div class="chat">
-        <div class="header">Multi-user FastAPI Chat</div>
-
-        <div class="topbar">
-            <input id="username" type="text" placeholder="Tvoje meno" value="User">
+  <div class="app">
+    <aside class="panel sidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <div class="brand-icon">RC</div>
+          <div>
+            <h1>Room Chat</h1>
+            <p>Iba ľudia, čo sa joinli. História zostáva po rejoin.</p>
+          </div>
         </div>
 
-        <div id="messages" class="messages"></div>
-
-        <div class="inputBox">
-            <input id="messageText" type="text" placeholder="Napíš správu..." autocomplete="off">
-            <button onclick="sendMessage()">Odoslať</button>
+        <div class="section">
+          <label for="myName">Tvoje meno</label>
+          <input id="myName" class="field" type="text" maxlength="18" placeholder="napr. Alex" value="Alex" />
         </div>
-    </div>
 
-    <script>
-        const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-        const ws = new WebSocket(`${protocol}://${window.location.host}/ws`);
-        const messages = document.getElementById("messages");
-        const messageInput = document.getElementById("messageText");
-        const usernameInput = document.getElementById("username");
+        <div class="section">
+          <label for="newRoomName">Nová roomka</label>
+          <input id="newRoomName" class="field" type="text" maxlength="24" placeholder="napr. Futbal" />
+          <div class="btn-row">
+            <button id="createRoomBtn" class="btn primary">Create room</button>
+            <button id="joinRoomBtn" class="btn secondary">Join current</button>
+          </div>
+        </div>
 
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
+        <div class="helper">Keď sa v tom istom prehliadači vrátiš s rovnakým menom, ostaneš členom roomky a uvidíš aj staršie správy.</div>
+      </div>
 
-            const item = document.createElement("div");
-            item.className = "msg" + (data.type === "system" ? " system" : "");
+      <div id="roomList" class="room-list"></div>
+    </aside>
 
-            const meta = document.createElement("div");
-            meta.className = "meta";
-            meta.textContent = data.type === "system"
-                ? "Systém"
-                : `${data.username} • ${data.time}`;
+    <main class="panel chat">
+      <div class="chat-top">
+        <div class="chat-title">
+          <h2 id="roomTitle">Vyber alebo vytvor roomku</h2>
+          <p id="roomSubtitle">Najprv create room alebo join current</p>
+        </div>
+        <div id="statusText" class="status">Nepripojený</div>
+      </div>
 
-            const text = document.createElement("div");
-            text.textContent = data.message;
+      <div id="members" class="members"></div>
 
-            item.appendChild(meta);
-            item.appendChild(text);
-            messages.appendChild(item);
-            messages.scrollTop = messages.scrollHeight;
+      <section id="messages" class="messages"></section>
+
+      <div class="composer">
+        <select id="senderSelect" class="select"></select>
+        <div>
+          <textarea id="messageInput" class="textarea" placeholder="Napíš správu do roomky... Enter = odoslať, Shift+Enter = nový riadok"></textarea>
+          <div class="helper">Správu môže odoslať iba meno, ktoré je v roomke. Rejoin s rovnakým menom obnoví členstvo aj históriu.</div>
+        </div>
+        <button id="sendBtn" class="btn primary">Send</button>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const roomListEl = document.getElementById('roomList');
+    const roomTitleEl = document.getElementById('roomTitle');
+    const roomSubtitleEl = document.getElementById('roomSubtitle');
+    const statusTextEl = document.getElementById('statusText');
+    const membersEl = document.getElementById('members');
+    const messagesEl = document.getElementById('messages');
+    const senderSelectEl = document.getElementById('senderSelect');
+    const messageInputEl = document.getElementById('messageInput');
+    const sendBtnEl = document.getElementById('sendBtn');
+    const myNameEl = document.getElementById('myName');
+    const newRoomNameEl = document.getElementById('newRoomName');
+    const createRoomBtnEl = document.getElementById('createRoomBtn');
+    const joinRoomBtnEl = document.getElementById('joinRoomBtn');
+
+    const STORAGE_KEY = 'room_chat_state_v3';
+    const PRESENCE_TIMEOUT_MS = 45000;
+
+    function defaultState() {
+      return { rooms: [], currentRoomId: null, myName: 'Alex' };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        return {
+          rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
+          currentRoomId: parsed.currentRoomId || null,
+          myName: parsed.myName || 'Alex'
         };
+      } catch {
+        return defaultState();
+      }
+    }
 
-        ws.onclose = function() {
-            const item = document.createElement("div");
-            item.className = "msg system";
-            item.textContent = "Pripojenie bolo ukončené.";
-            messages.appendChild(item);
+    const state = loadState();
+    let currentRoomId = state.currentRoomId || null;
+
+    function saveState() {
+      state.currentRoomId = currentRoomId;
+      state.myName = safeName(myNameEl.value) || 'Alex';
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    function safeName(value) {
+      return (value || '').trim().slice(0, 18);
+    }
+
+    function safeRoom(value) {
+      return (value || '').trim().slice(0, 24);
+    }
+
+    function currentTime() {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    }
+
+    function nowTs() {
+      return Date.now();
+    }
+
+    function initials(name) {
+      return name.trim().split(/\s+/).slice(0, 2).map(x => x[0]?.toUpperCase() || '').join('') || '?';
+    }
+
+    function avatarGradient(seed) {
+      const gradients = [
+        'linear-gradient(135deg,#2563eb,#34d399)',
+        'linear-gradient(135deg,#8b5cf6,#ec4899)',
+        'linear-gradient(135deg,#f59e0b,#ef4444)',
+        'linear-gradient(135deg,#06b6d4,#3b82f6)',
+        'linear-gradient(135deg,#10b981,#84cc16)'
+      ];
+      let hash = 0;
+      for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+      return gradients[Math.abs(hash) % gradients.length];
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function getRooms() {
+      return state.rooms;
+    }
+
+    function getCurrentRoom() {
+      return getRooms().find(room => room.id === currentRoomId) || null;
+    }
+
+    function ensureRoomShape(room) {
+      room.members = (room.members || []).map(member => {
+        if (typeof member === 'string') {
+          return { name: member, online: false, lastSeen: 0, joinedAt: nowTs() };
+        }
+        return {
+          name: member.name,
+          online: Boolean(member.online),
+          lastSeen: Number(member.lastSeen || 0),
+          joinedAt: Number(member.joinedAt || nowTs())
         };
+      });
+      room.messages = Array.isArray(room.messages) ? room.messages : [];
+    }
 
-        function sendMessage() {
-            const username = usernameInput.value.trim() || "User";
-            const message = messageInput.value.trim();
+    function hydrateState() {
+      getRooms().forEach(ensureRoomShape);
+      myNameEl.value = state.myName || 'Alex';
+      if (currentRoomId && !getCurrentRoom()) currentRoomId = null;
+    }
 
-            if (!message) return;
+    function getMember(room, name) {
+      return room.members.find(member => member.name === name) || null;
+    }
 
-            ws.send(JSON.stringify({
-                username: username,
-                message: message
-            }));
+    function isOnline(member) {
+      return member && member.online && (nowTs() - (member.lastSeen || 0) < PRESENCE_TIMEOUT_MS);
+    }
 
-            messageInput.value = "";
-            messageInput.focus();
+    function refreshPresence() {
+      getRooms().forEach(room => {
+        room.members.forEach(member => {
+          if (!isOnline(member)) member.online = false;
+        });
+      });
+    }
+
+    function addSystemMessage(room, text) {
+      room.messages.push({ type: 'system', text, createdAt: nowTs() });
+    }
+
+    function createRoom() {
+      const roomName = safeRoom(newRoomNameEl.value);
+      const myName = safeName(myNameEl.value);
+
+      if (!myName) return alert('Najprv zadaj svoje meno.');
+      if (!roomName) return alert('Zadaj názov roomky.');
+      if (getRooms().some(r => r.name.toLowerCase() === roomName.toLowerCase())) return alert('Taká roomka už existuje.');
+
+      const room = {
+        id: `room_${Date.now()}`,
+        name: roomName,
+        members: [{ name: myName, online: true, lastSeen: nowTs(), joinedAt: nowTs() }],
+        messages: []
+      };
+
+      addSystemMessage(room, `${myName} vytvoril roomku.`);
+      getRooms().push(room);
+      currentRoomId = room.id;
+      newRoomNameEl.value = '';
+      saveState();
+      renderAll();
+    }
+
+    function joinCurrentRoom() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+
+      if (!myName) return alert('Zadaj svoje meno.');
+      if (!room) return alert('Najprv vyber alebo vytvor roomku.');
+
+      const existing = getMember(room, myName);
+      if (existing) {
+        existing.online = true;
+        existing.lastSeen = nowTs();
+        addSystemMessage(room, `${myName} sa znovu pripojil.`);
+      } else {
+        room.members.push({ name: myName, online: true, lastSeen: nowTs(), joinedAt: nowTs() });
+        addSystemMessage(room, `${myName} sa pripojil do roomky.`);
+      }
+      saveState();
+      renderAll();
+    }
+
+    function leaveCurrentRoom() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+      if (!room || !myName) return;
+      const member = getMember(room, myName);
+      if (!member) return;
+      member.online = false;
+      member.lastSeen = nowTs();
+      addSystemMessage(room, `${myName} odišiel offline.`);
+      saveState();
+    }
+
+    function markMeOnline() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+      if (!room || !myName) return;
+      const member = getMember(room, myName);
+      if (!member) return;
+      member.online = true;
+      member.lastSeen = nowTs();
+      saveState();
+    }
+
+    function renderRoomList() {
+      roomListEl.innerHTML = '';
+      const rooms = getRooms();
+      if (!rooms.length) {
+        roomListEl.innerHTML = '<div class="helper" style="padding:12px">Zatiaľ tu nie je žiadna roomka.</div>';
+        return;
+      }
+
+      rooms.forEach(room => {
+        const active = room.id === currentRoomId;
+        const onlineCount = room.members.filter(isOnline).length;
+        const item = document.createElement('div');
+        item.className = `room-item ${active ? 'active' : ''}`;
+        item.innerHTML = `
+          <div class="avatar" style="background:${avatarGradient(room.name)}">${escapeHtml(room.name[0].toUpperCase())}</div>
+          <div>
+            <div class="room-title">${escapeHtml(room.name)}</div>
+            <div class="room-sub">${onlineCount} online • ${room.members.length} joined</div>
+          </div>
+          <div class="room-count">${room.members.length}</div>
+        `;
+        item.addEventListener('click', () => {
+          currentRoomId = room.id;
+          saveState();
+          renderAll();
+        });
+        roomListEl.appendChild(item);
+      });
+    }
+
+    function renderHeader() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+
+      if (!room) {
+        roomTitleEl.textContent = 'Vyber alebo vytvor roomku';
+        roomSubtitleEl.textContent = 'Najprv create room alebo join current';
+        statusTextEl.textContent = myName ? `Meno: ${myName}` : 'Nepripojený';
+        return;
+      }
+
+      const onlineCount = room.members.filter(isOnline).length;
+      roomTitleEl.textContent = room.name;
+      roomSubtitleEl.textContent = `${onlineCount} online • ${room.members.length} joined`;
+
+      const member = myName ? getMember(room, myName) : null;
+      if (!member) statusTextEl.textContent = 'Nie si v roomke';
+      else if (isOnline(member)) statusTextEl.textContent = `Si online ako ${myName}`;
+      else statusTextEl.textContent = 'Si offline, ale stále v roomke';
+    }
+
+    function renderMembers() {
+      const room = getCurrentRoom();
+      membersEl.innerHTML = '';
+
+      if (!room) {
+        membersEl.innerHTML = '<div class="helper">Keď vytvoríš roomku alebo nejakú vyberieš, tu uvidíš iba tých, čo sa joinli.</div>';
+        return;
+      }
+
+      if (!room.members.length) {
+        membersEl.innerHTML = '<div class="helper">Zatiaľ sa nikto nepripojil.</div>';
+        return;
+      }
+
+      room.members.forEach(member => {
+        const chip = document.createElement('div');
+        chip.className = 'member-chip';
+        chip.innerHTML = `<span class="member-dot ${isOnline(member) ? '' : 'offline'}"></span><span>${escapeHtml(member.name)}</span>`;
+        membersEl.appendChild(chip);
+      });
+    }
+
+    function renderSenderSelect() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+      senderSelectEl.innerHTML = '';
+
+      if (!room || !room.members.length) {
+        const opt = document.createElement('option');
+        opt.textContent = 'No joined users';
+        opt.value = '';
+        senderSelectEl.appendChild(opt);
+        senderSelectEl.disabled = true;
+        return;
+      }
+
+      senderSelectEl.disabled = false;
+      room.members.forEach(member => {
+        const opt = document.createElement('option');
+        opt.value = member.name;
+        opt.textContent = member.name === myName ? `${member.name} (ty)` : member.name;
+        if (member.name === myName) opt.selected = true;
+        senderSelectEl.appendChild(opt);
+      });
+    }
+
+    function renderMessages() {
+      const room = getCurrentRoom();
+      const myName = safeName(myNameEl.value);
+      messagesEl.innerHTML = '';
+
+      if (!room) {
+        messagesEl.innerHTML = '<div class="empty">Tu budú správy aj história roomky. Keď sa znovu pripojíš s rovnakým menom v tom istom prehliadači, uvidíš čo sa stalo počas offline.</div>';
+        return;
+      }
+
+      if (!room.messages.length) {
+        messagesEl.innerHTML = '<div class="empty">Zatiaľ tu nie sú žiadne správy.</div>';
+        return;
+      }
+
+      room.messages.forEach(msg => {
+        if (msg.type === 'system') {
+          const sys = document.createElement('div');
+          sys.className = 'system';
+          sys.textContent = msg.text;
+          messagesEl.appendChild(sys);
+          return;
         }
 
-        messageInput.addEventListener("keydown", function(event) {
-            if (event.key === "Enter") {
-                sendMessage();
-            }
-        });
-    </script>
+        const me = msg.sender === myName;
+        const row = document.createElement('div');
+        row.className = `message-row ${me ? 'me' : ''}`;
+        row.innerHTML = `
+          <div class="mini-avatar" style="background:${avatarGradient(msg.sender)}">${escapeHtml(initials(msg.sender))}</div>
+          <div class="message-body">
+            <div class="meta">
+              <span>${escapeHtml(msg.sender)}</span>
+              <span>${msg.time}</span>
+            </div>
+            <div class="bubble">${escapeHtml(msg.text)}</div>
+          </div>
+        `;
+        messagesEl.appendChild(row);
+      });
+
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function sendMessage() {
+      const room = getCurrentRoom();
+      const sender = senderSelectEl.value;
+      const text = messageInputEl.value.trim();
+
+      if (!room) return alert('Najprv vytvor alebo vyber roomku.');
+      if (!sender) return alert('Vyber používateľa.');
+
+      const member = getMember(room, sender);
+      if (!member) return alert('Správu môže poslať len používateľ, ktorý je joinnutý v roomke.');
+      if (!text) return;
+
+      member.online = true;
+      member.lastSeen = nowTs();
+      room.messages.push({ sender, text, time: currentTime(), createdAt: nowTs() });
+
+      messageInputEl.value = '';
+      saveState();
+      renderAll();
+    }
+
+    function renderAll() {
+      refreshPresence();
+      renderRoomList();
+      renderHeader();
+      renderMembers();
+      renderSenderSelect();
+      renderMessages();
+    }
+
+    createRoomBtnEl.addEventListener('click', createRoom);
+    joinRoomBtnEl.addEventListener('click', joinCurrentRoom);
+    sendBtnEl.addEventListener('click', sendMessage);
+    myNameEl.addEventListener('input', () => {
+      saveState();
+      renderAll();
+    });
+
+    messageInputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    window.addEventListener('beforeunload', () => {
+      leaveCurrentRoom();
+    });
+
+    hydrateState();
+    renderAll();
+    setInterval(markMeOnline, 15000);
+    setInterval(() => {
+      refreshPresence();
+      renderAll();
+    }, 10000);
+  </script>
 </body>
 </html>
